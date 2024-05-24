@@ -1,0 +1,167 @@
+#Programming Group Project Assignment overview For our group project, we used Python to create a program that can download videos from YouTube. We spent considerable time brainstorming to find a meaningful project idea. We chose this project because it has an actual practical real-life application, unlike other projects such as stock picking programs or tic-tac-toe solvers, amongst others, which are rarely used by students after completion. There are a multitude of reasons to use our program. There are times when an internet connection is unavailable. For example, when traveling abroad to avoid high roaming costs, or during flights where Wi-Fi is either unavailable or expensive. Additionally, YouTube currently allows video downloads only for YouTube Premium subscribers, which requires a monthly fee to be paid. For these reasons, we believe our project addresses a genuine need and goes beyond being just a "task" to solve.
+#Further things of notice YouTube frequently changes its design and structure, which can disrupt video downloaders. We encountered this issue when our downloader stopped working entirely due to such a change. Fortunately, the PyTube team quickly addresses these issues and merges fixes into the master branch. In our case, we accessed the PyTube GitHub site and applied the necessary fix promptly. Age-restricted videos cannot be downloaded because logging in via a YouTube account is required to verify age. This functionality is beyond the scope of our project and was not implemented. It's important to note that not all age-restricted videos are easily identifiable, as uploaders can designate this themselves. To address this limitation, we included an error message in the output box indicating that a video cannot be downloaded due to age restriction.
+#The code starts here
+import tkinter as tk
+import customtkinter as ctk
+from pytube import YouTube
+from tkinter import filedialog
+from PIL import ImageTk, Image
+import urllib.request as url
+import time
+import os
+from urllib.error import HTTPError
+
+# Function to select the download path
+def select_download_path():
+    global download_path
+    download_path = filedialog.askdirectory()
+    if download_path:
+        path_label.config(text=f"Download Path: {download_path}")
+
+# Function to start the download
+def startDownload():
+    try:
+        ytLink = link.get()
+        ytObject = YouTube(ytLink, on_progress_callback=on_progress)
+        if format_dropdown.get() == "mp3":
+            audio = ytObject.streams.filter(only_audio=True).first()
+            audio.download(download_path)
+        elif format_dropdown.get() == "mp4":
+            video = ytObject.streams.get_highest_resolution()
+            video.download(download_path)
+        title.configure(text=ytObject.title, text_color="white")
+        finishLabel.configure(text="Downloaded!", text_color="green")
+    except Exception as e:
+        finishLabel.configure(text="Download Error!", text_color="red")
+        print(e)
+
+# Progress bar update function
+def on_progress(stream, chunk, bytes_remaining):
+    total_size = stream.filesize
+    bytes_downloaded = total_size - bytes_remaining
+    percentage_of_completion = bytes_downloaded / total_size * 100
+    per = str(int(percentage_of_completion))
+    pPercentage.configure(text=per + "%")
+    pPercentage.update()
+    progressBar.set(float(percentage_of_completion / 100))
+
+# Function to download the image
+def download_image(image_url, filename):
+    try:
+        url.urlretrieve(image_url, filename)
+    except Exception as e:
+        print(f"Error downloading image: {e}")
+
+# Function to check if the image is cached
+def is_cached(filename):
+    return os.path.exists(filename)
+
+# Function to fetch the image, either from the server or from cache
+def fetch_image(image_url, cache_filename, retries=4, backoff_factor=5):
+    for attempt in range(retries):
+        try:
+            if not is_cached(cache_filename):
+                download_image(image_url, cache_filename)
+                time.sleep(10)
+            return cache_filename
+        except HTTPError as e:
+            if e.code == 429:
+                delay = backoff_factor ** attempt
+                print(f"Rate limit exceeded, waiting for {delay} seconds before retrying...")
+                time.sleep(delay)
+            else:
+                raise
+    else:
+        raise HTTPError("Exceeded maximum number of retries")
+
+# Toggle light/dark mode function
+def toggle_mode():
+    if mode_var.get() == "Light":
+        ctk.set_appearance_mode("light")
+        update_text_colors("black")
+    else:
+        ctk.set_appearance_mode("dark")
+        update_text_colors("white")
+
+def update_text_colors(color):
+    title.configure(text_color=color)
+    path_label.configure(foreground=color)
+    pPercentage.configure(text_color=color)
+    finishLabel.configure(text_color=color)
+
+# Example usage
+image_url = "https://wallsdesk.com/wp-content/uploads/2016/06/youtube-logo.jpg"
+cache_filename = "youtube.jpg"
+
+cached_image = fetch_image(image_url, cache_filename)
+
+# System settings
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("blue")
+
+# Create the main application window
+app = ctk.CTk()
+app.geometry("980x580")
+app.title("YouTube Downloader")
+
+# Download the image
+download_image(image_url, cache_filename)
+
+# Resizing the image
+original_image = Image.open("youtube.jpg")
+desired_width = 300
+desired_height = 200
+resized_image = original_image.resize((desired_width, desired_height), Image.LANCZOS)
+
+# Insert the image into the UI
+try:
+    img = ImageTk.PhotoImage(resized_image)
+    title = ctk.CTkLabel(app, text="Insert a YouTube Link", image=img, compound='top')
+except Exception as e:
+    print(f"Error loading image: {e}")
+    title = ctk.CTkLabel(app, text="Insert a YouTube Link")
+
+# Adding UI elements
+title.pack(padx=10, pady=10)
+
+# Link input
+url_var = tk.StringVar()
+link = ctk.CTkEntry(app, width=350, height=40, textvariable=url_var)
+link.pack(padx=10, pady=10)
+
+# File format dropdown menu
+format_dropdown = ctk.CTkComboBox(app, values=["mp3", "mp4"])
+format_dropdown.pack(padx=10, pady=10)
+
+# Download button
+download = ctk.CTkButton(app, text="Download", command=startDownload)
+download.pack(padx=10, pady=5)
+
+# Progress bar
+progressBar = ctk.CTkProgressBar(app, width=400)
+progressBar.set(0)
+progressBar.pack(padx=10, pady=5)
+
+# Progress percentage label
+pPercentage = ctk.CTkLabel(app, text="0%")
+pPercentage.pack(padx=10, pady=5)
+
+# Select download path button
+select_path_button = ctk.CTkButton(app, text="Select Download Path", command=select_download_path)
+select_path_button.pack(pady=5)
+
+# Label to display the selected path
+path_label = tk.Label(app, background="grey", foreground="white", text="No path selected", font=("Helvetica", 14))
+path_label.pack(pady=5)
+
+# Finished downloading label
+finishLabel = ctk.CTkLabel(app, text="")
+finishLabel.pack(padx=10, pady=5)
+
+# Mode switch
+mode_var = ctk.StringVar(value="Light")
+mode_switch = ctk.CTkSwitch(app, text="Mode", variable=mode_var, onvalue="Dark", offvalue="Light", command=toggle_mode)
+mode_switch.place(relx=1.0, rely=0.0, anchor='ne', x=-10, y=10)
+
+# Run the application
+app.mainloop()
